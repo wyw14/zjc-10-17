@@ -32,6 +32,61 @@ function getDayStartTimestamp(date = new Date()) {
   return d.getTime();
 }
 
+function countWords(text) {
+  if (!text) return 0;
+  return text.trim().length;
+}
+
+function getMonthKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+function getMonthProgress(data, year, month) {
+  const prefix = `${year}-${String(month).padStart(2, '0')}-`;
+  const todayStr = getDateString();
+  let answeredDays = 0;
+  let totalDaysSoFar = 0;
+  let metMinWordsDays = 0;
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${prefix}${String(day).padStart(2, '0')}`;
+    const entry = data.answers[dateStr];
+    if (dateStr <= todayStr) {
+      totalDaysSoFar++;
+    }
+    if (entry && entry.answered) {
+      answeredDays++;
+      if (countWords(entry.answer) >= (data.goals?.minWords || 0)) {
+        metMinWordsDays++;
+      }
+    }
+  }
+
+  return {
+    targetDays: data.goals?.targetDays || 0,
+    minWords: data.goals?.minWords || 0,
+    answeredDays,
+    metMinWordsDays,
+    totalDaysSoFar,
+    daysInMonth,
+    progressPercent: data.goals?.targetDays ? Math.min(100, Math.round(answeredDays / data.goals.targetDays * 100)) : 0
+  };
+}
+
+function ensureGoals(data) {
+  if (!data.goals) {
+    data.goals = {
+      targetDays: 20,
+      minWords: 100
+    };
+    writeData(data);
+  }
+  return data.goals;
+}
+
 function isNewDay(data) {
   const todayStr = getDateString();
   const todayStart = getDayStartTimestamp();
@@ -105,20 +160,31 @@ app.get('/api/today', (req, res) => {
   try {
     const data = readData();
     const question = ensureTodayQuestion(data);
+    const goals = ensureGoals(data);
     const todayStr = getDateString();
     const todayAnswer = data.answers[todayStr] || { answer: '', answered: false };
+    const wordCount = countWords(todayAnswer.answer);
+    const meetsMinWords = wordCount >= goals.minWords;
+
+    const now = new Date();
+    const monthProgress = getMonthProgress(data, now.getFullYear(), now.getMonth() + 1);
+
     res.json({
       success: true,
       data: {
         question: question,
         answer: todayAnswer.answer,
         answered: todayAnswer.answered,
-        date: todayStr
+        date: todayStr,
+        wordCount,
+        meetsMinWords,
+        goals,
+        monthProgress
       }
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: '服务器错�? });
+    res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
 
@@ -151,13 +217,14 @@ app.post('/api/answer', (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: '服务器错�? });
+    res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
 
 app.get('/api/history', (req, res) => {
   try {
     const data = readData();
+    const goals = ensureGoals(data);
     const { year, month } = req.query;
     const y = year ? parseInt(year) : new Date().getFullYear();
     const m = month ? parseInt(month) : new Date().getMonth() + 1;
@@ -168,13 +235,15 @@ app.get('/api/history', (req, res) => {
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const entry = data.answers[dateStr];
+      const wordCount = entry ? countWords(entry.answer) : 0;
       calendar.push({
         date: dateStr,
         day: day,
         hasQuestion: !!entry,
         answered: !!(entry && entry.answered),
         answer: entry ? entry.answer : '',
-        question: entry ? entry.question : ''
+        question: entry ? entry.question : '',
+        wordCount
       });
     }
 
@@ -200,6 +269,8 @@ app.get('/api/history', (req, res) => {
       }
     }
 
+    const monthProgress = getMonthProgress(data, y, m);
+
     res.json({
       success: true,
       data: {
@@ -211,12 +282,14 @@ app.get('/api/history', (req, res) => {
           missedCount,
           totalDays: answeredCount + missedCount
         },
+        goals,
+        monthProgress,
         allAnswers: data.answers
       }
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: '服务器错�? });
+    res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
 
@@ -229,13 +302,54 @@ app.get('/api/question-bank', (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: '服务器错�? });
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+});
+
+app.get('/api/goals', (req, res) => {
+  try {
+    const data = readData();
+    const goals = ensureGoals(data);
+    res.json({
+      success: true,
+      data: goals
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+});
+
+app.put('/api/goals', (req, res) => {
+  try {
+    const { targetDays, minWords } = req.body;
+    if (typeof targetDays !== 'number' || targetDays < 0 || targetDays > 31) {
+      return res.status(400).json({ success: false, message: '目标天数必须是 0-31 之间的数字' });
+    }
+    if (typeof minWords !== 'number' || minWords < 0) {
+      return res.status(400).json({ success: false, message: '最低字数必须是非负数字' });
+    }
+
+    const data = readData();
+    data.goals = {
+      targetDays,
+      minWords
+    };
+    writeData(data);
+
+    res.json({
+      success: true,
+      data: data.goals
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`每日问答后端服务已启�? http://localhost:${PORT}`);
+  console.log(`每日问答后端服务已启动: http://localhost:${PORT}`);
   const data = readData();
   ensureTodayQuestion(data);
-  console.log(`今日问题已准备就�? ${data.currentQuestion.question}`);
+  console.log(`今日问题已准备就绪: ${data.currentQuestion.question}`);
 });

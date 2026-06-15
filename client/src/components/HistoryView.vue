@@ -1,5 +1,54 @@
 <template>
   <div class="card">
+    <div v-if="history && history.monthProgress" class="goal-section">
+      <div class="goal-header">
+        <h3 class="goal-title">🎯 本月目标</h3>
+        <button class="goal-settings-btn" @click="$emit('open-goals')">
+          ⚙️ 设置目标
+        </button>
+      </div>
+
+      <div class="goal-stats">
+        <div class="goal-stat-card primary">
+          <div class="goal-stat-num">
+            {{ history.monthProgress.answeredDays }}
+            <span class="goal-stat-unit">/ {{ history.monthProgress.targetDays }}</span>
+          </div>
+          <div class="goal-stat-label">已完成天数</div>
+        </div>
+        <div class="goal-stat-card success">
+          <div class="goal-stat-num">
+            {{ history.monthProgress.progressPercent }}%
+          </div>
+          <div class="goal-stat-label">目标完成率</div>
+        </div>
+        <div class="goal-stat-card info">
+          <div class="goal-stat-num">
+            {{ history.monthProgress.metMinWordsDays }}
+          </div>
+          <div class="goal-stat-label">达标字数天数</div>
+        </div>
+      </div>
+
+      <div class="goal-progress">
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            :style="{ width: history.monthProgress.progressPercent + '%' }"
+            :class="{ complete: history.monthProgress.progressPercent >= 100 }"
+          ></div>
+        </div>
+        <div class="progress-hint">
+          <span v-if="history.monthProgress.progressPercent < 100">
+            还差 {{ history.monthProgress.targetDays - history.monthProgress.answeredDays }} 天完成本月目标
+          </span>
+          <span v-else class="complete-text">
+            🎉 恭喜！本月目标已完成！
+          </span>
+        </div>
+      </div>
+    </div>
+
     <div v-if="history && history.stats" class="stats-panel">
       <div class="stat-card green">
         <div class="stat-num">{{ history.stats.answeredCount }}</div>
@@ -62,6 +111,11 @@
       <div v-if="selectedDay.hasQuestion">
         <p class="q-text">❓ {{ selectedDay.question }}</p>
         <div v-if="selectedDay.answered && selectedDay.answer">
+          <div class="answer-meta">
+            <span class="word-badge">
+              📝 {{ selectedDay.wordCount || 0 }} 字
+            </span>
+          </div>
           <p class="a-text">{{ selectedDay.answer }}</p>
         </div>
         <div v-else class="empty-note">这一天没有回答</div>
@@ -81,7 +135,7 @@ const props = defineProps({
   loading: Boolean
 })
 
-defineEmits(['prev-month', 'next-month'])
+defineEmits(['prev-month', 'next-month', 'open-goals'])
 
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 const selectedDay = ref(null)
@@ -147,3 +201,126 @@ watch(() => props.history, () => {
   selectedDay.value = null
 })
 </script>
+
+<style scoped>
+.goal-section {
+  margin-bottom: 25px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  color: white;
+}
+
+.goal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.goal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.goal-settings-btn {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.goal-settings-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.goal-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.goal-stat-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+}
+
+.goal-stat-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.goal-stat-unit {
+  font-size: 0.85rem;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.goal-stat-label {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+.goal-progress {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.progress-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: white;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.progress-fill.complete {
+  background: linear-gradient(90deg, #ffe066, #ffd43b);
+}
+
+.progress-hint {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  text-align: center;
+}
+
+.complete-text {
+  font-weight: 600;
+}
+
+.answer-meta {
+  margin-bottom: 10px;
+}
+
+.word-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #e9d8fd;
+  color: #6b46c1;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+</style>

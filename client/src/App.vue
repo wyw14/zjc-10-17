@@ -20,6 +20,13 @@
       >
         历史记录
       </button>
+      <button
+        class="tab-btn settings-btn"
+        @click="showGoalSettings = true"
+        title="设置写作目标"
+      >
+        🎯 目标
+      </button>
     </div>
 
     <div v-if="loading || !todayData" class="loading">加载中...</div>
@@ -37,6 +44,15 @@
       :loading="historyLoading"
       @prev-month="prevMonth"
       @next-month="nextMonth"
+      @open-goals="showGoalSettings = true"
+    />
+
+    <GoalSettings
+      :visible="showGoalSettings"
+      :goals="goals"
+      :saving="savingGoals"
+      @close="showGoalSettings = false"
+      @save="saveGoals"
     />
 
     <div v-if="toast.show" class="toast" :class="{ error: toast.isError }">
@@ -46,9 +62,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import TodayView from './components/TodayView.vue'
 import HistoryView from './components/HistoryView.vue'
+import GoalSettings from './components/GoalSettings.vue'
 
 const currentTab = ref('today')
 const loading = ref(false)
@@ -56,6 +73,9 @@ const submitting = ref(false)
 const todayData = ref(null)
 const history = ref(null)
 const historyLoading = ref(false)
+const goals = ref(null)
+const showGoalSettings = ref(false)
+const savingGoals = ref(false)
 
 const toast = reactive({
   show: false,
@@ -79,6 +99,9 @@ async function loadToday() {
     const json = await res.json()
     if (json.success) {
       todayData.value = json.data
+      if (json.data.goals) {
+        goals.value = json.data.goals
+      }
     } else {
       showToast('加载失败', true)
     }
@@ -121,6 +144,9 @@ async function loadHistory() {
     const json = await res.json()
     if (json.success) {
       history.value = json.data
+      if (json.data.goals) {
+        goals.value = json.data.goals
+      }
     }
   } catch (e) {
     showToast('加载历史失败', true)
@@ -149,7 +175,48 @@ function nextMonth() {
   loadHistory()
 }
 
+async function saveGoals(newGoals) {
+  savingGoals.value = true
+  try {
+    const res = await fetch('/api/goals', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newGoals)
+    })
+    const json = await res.json()
+    if (json.success) {
+      goals.value = json.data
+      showToast('目标设置已保存 ✓')
+      showGoalSettings.value = false
+      await Promise.all([
+        loadToday(),
+        currentTab.value === 'history' ? loadHistory() : Promise.resolve()
+      ])
+    } else {
+      showToast(json.message || '保存失败', true)
+    }
+  } catch (e) {
+    showToast('网络错误', true)
+  } finally {
+    savingGoals.value = false
+  }
+}
+
 onMounted(() => {
   loadToday()
 })
 </script>
+
+<style scoped>
+.tabs {
+  position: relative;
+}
+
+.settings-btn {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+</style>
