@@ -11,10 +11,10 @@
       <div class="goal-stats">
         <div class="goal-stat-card primary">
           <div class="goal-stat-num">
-            {{ history.monthProgress.answeredDays }}
+            {{ history.monthProgress.metMinWordsDays }}
             <span class="goal-stat-unit">/ {{ history.monthProgress.targetDays }}</span>
           </div>
-          <div class="goal-stat-label">已完成天数</div>
+          <div class="goal-stat-label">达标天数</div>
         </div>
         <div class="goal-stat-card success">
           <div class="goal-stat-num">
@@ -24,9 +24,9 @@
         </div>
         <div class="goal-stat-card info">
           <div class="goal-stat-num">
-            {{ history.monthProgress.metMinWordsDays }}
+            {{ history.monthProgress.answeredDays }}
           </div>
-          <div class="goal-stat-label">达标字数天数</div>
+          <div class="goal-stat-label">已回答天数</div>
         </div>
       </div>
 
@@ -40,11 +40,14 @@
         </div>
         <div class="progress-hint">
           <span v-if="history.monthProgress.progressPercent < 100">
-            还差 {{ history.monthProgress.targetDays - history.monthProgress.answeredDays }} 天完成本月目标
+            还差 {{ history.monthProgress.targetDays - history.monthProgress.metMinWordsDays }} 天达标完成本月目标
           </span>
           <span v-else class="complete-text">
             🎉 恭喜！本月目标已完成！
           </span>
+        </div>
+        <div v-if="history.monthProgress.answeredDays > history.monthProgress.metMinWordsDays" class="progress-sub-hint">
+          💡 还有 {{ history.monthProgress.answeredDays - history.monthProgress.metMinWordsDays }} 天回答未达最低字数，补充后可计入目标
         </div>
       </div>
     </div>
@@ -90,11 +93,15 @@
     <div class="legend">
       <div class="legend-item">
         <div class="legend-box answered"></div>
-        <span>已回答</span>
+        <span>已达标</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-box partial"></div>
+        <span>已回答未达标</span>
       </div>
       <div class="legend-item">
         <div class="legend-box missed"></div>
-        <span>断更（应回答未答）</span>
+        <span>断更</span>
       </div>
       <div class="legend-item">
         <div class="legend-box today"></div>
@@ -112,8 +119,11 @@
         <p class="q-text">❓ {{ selectedDay.question }}</p>
         <div v-if="selectedDay.answered && selectedDay.answer">
           <div class="answer-meta">
-            <span class="word-badge">
-              📝 {{ selectedDay.wordCount || 0 }} 字
+            <span class="word-badge" :class="{ 'word-badge-warning': !meetsDayMinWords(selectedDay) }">
+              {{ meetsDayMinWords(selectedDay) ? '✅' : '⚠️' }} {{ selectedDay.wordCount || 0 }} 字
+            </span>
+            <span v-if="!meetsDayMinWords(selectedDay)" class="word-hint">
+              未达最低 {{ history?.goals?.minWords || 0 }} 字
             </span>
           </div>
           <p class="a-text">{{ selectedDay.answer }}</p>
@@ -165,6 +175,13 @@ function isPast(dateStr) {
   return dateStr < getTodayStr()
 }
 
+function meetsDayMinWords(day) {
+  if (!day || !day.answered) return false
+  const minWords = props.history?.goals?.minWords || 0
+  if (minWords <= 0) return true
+  return (day.wordCount || 0) >= minWords
+}
+
 function getDayClass(day) {
   if (!day) return 'empty'
   const classes = []
@@ -173,7 +190,11 @@ function getDayClass(day) {
     classes.push('today')
   }
   if (day.answered) {
-    classes.push('answered')
+    if (meetsDayMinWords(day)) {
+      classes.push('answered')
+    } else {
+      classes.push('partial')
+    }
   } else if (day.hasQuestion && isPast(day.date)) {
     classes.push('missed')
   } else if (day.hasQuestion) {
@@ -302,8 +323,16 @@ watch(() => props.history, () => {
 
 .progress-hint {
   font-size: 0.85rem;
-  opacity: 0.9;
+  opacity: 0.95;
   text-align: center;
+  font-weight: 500;
+}
+
+.progress-sub-hint {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  text-align: center;
+  margin-top: 6px;
 }
 
 .complete-text {
@@ -312,6 +341,10 @@ watch(() => props.history, () => {
 
 .answer-meta {
   margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .word-badge {
@@ -322,5 +355,24 @@ watch(() => props.history, () => {
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+.word-badge-warning {
+  background: #feebc8;
+  color: #c05621;
+}
+
+.word-hint {
+  font-size: 0.8rem;
+  color: #c05621;
+}
+
+.calendar-day.partial {
+  background: linear-gradient(135deg, #fbd38d 0%, #f6ad55 100%);
+  color: white;
+}
+
+.legend-box.partial {
+  background: linear-gradient(135deg, #fbd38d 0%, #f6ad55 100%);
 }
 </style>

@@ -72,7 +72,7 @@ function getMonthProgress(data, year, month) {
     metMinWordsDays,
     totalDaysSoFar,
     daysInMonth,
-    progressPercent: data.goals?.targetDays ? Math.min(100, Math.round(answeredDays / data.goals.targetDays * 100)) : 0
+    progressPercent: data.goals?.targetDays ? Math.min(100, Math.round(metMinWordsDays / data.goals.targetDays * 100)) : 0
   };
 }
 

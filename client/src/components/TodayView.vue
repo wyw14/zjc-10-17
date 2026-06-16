@@ -2,8 +2,11 @@
   <div class="card">
     <span class="date-label">📅 {{ formatDate(data.date) }}</span>
 
-    <div v-if="data.answered" class="status-badge status-answered">
-      ✓ 今日已回答
+    <div v-if="data.answered && meetsMinWords" class="status-badge status-answered">
+      ✓ 今日已完成
+    </div>
+    <div v-else-if="data.answered && !meetsMinWords" class="status-badge status-partial">
+      ⚠️ 已回答未达标
     </div>
     <div v-else class="status-badge status-unanswered">
       ⏰ 等待你的回答
@@ -13,7 +16,7 @@
       <div class="progress-info">
         <span class="progress-label">🎯 本月目标</span>
         <span class="progress-text">
-          {{ data.monthProgress.answeredDays }} / {{ data.monthProgress.targetDays }} 天
+          {{ data.monthProgress.metMinWordsDays }} / {{ data.monthProgress.targetDays }} 天
           ({{ data.monthProgress.progressPercent }}%)
         </span>
       </div>
@@ -24,6 +27,9 @@
           :class="{ complete: data.monthProgress.progressPercent >= 100 }"
         ></div>
       </div>
+      <div v-if="data.monthProgress.answeredDays > data.monthProgress.metMinWordsDays" class="progress-hint">
+        💡 还有 {{ data.monthProgress.answeredDays - data.monthProgress.metMinWordsDays }} 天回答未达最低字数，可修改后计入目标
+      </div>
     </div>
 
     <div class="question-text">
@@ -32,7 +38,7 @@
 
     <div class="answer-header">
       <label class="answer-label">✍️ 我的回答：</label>
-      <div class="word-count" :class="{ 'warning': !meetsMinWords && localAnswer.trim().length > 0 }">
+      <div class="word-count" :class="{ 'warning': !meetsMinWords && hasContent }">
         <span class="word-count-icon">{{ meetsMinWords ? '✅' : '📝' }}</span>
         <span>{{ currentWordCount }} 字</span>
         <span v-if="data.goals?.minWords > 0" class="word-target">
@@ -81,15 +87,25 @@ const emit = defineEmits(['submit'])
 
 const data = ref(props.todayData)
 const localAnswer = ref('')
-const showWarning = ref(false)
 
 const currentWordCount = computed(() => {
   return localAnswer.value.trim().length
 })
 
+const hasContent = computed(() => {
+  return localAnswer.value.trim().length > 0
+})
+
 const meetsMinWords = computed(() => {
   if (!props.todayData?.goals?.minWords) return true
   return currentWordCount.value >= props.todayData.goals.minWords
+})
+
+const showWarning = computed(() => {
+  if (!props.todayData?.goals?.minWords) return false
+  if (props.todayData.goals.minWords <= 0) return false
+  if (!hasContent.value) return false
+  return !meetsMinWords.value
 })
 
 watch(() => props.todayData, (newVal) => {
@@ -107,11 +123,6 @@ function formatDate(dateStr) {
 }
 
 function onInput() {
-  if (props.todayData?.goals?.minWords > 0 && localAnswer.value.trim().length > 0) {
-    showWarning.value = !meetsMinWords.value
-  } else {
-    showWarning.value = false
-  }
 }
 
 function handleSubmit() {
@@ -162,6 +173,13 @@ function handleSubmit() {
 
 .progress-fill.complete {
   background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+}
+
+.progress-hint {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #718096;
+  text-align: center;
 }
 
 .answer-header {
@@ -230,5 +248,10 @@ function handleSubmit() {
   font-size: 1.1rem;
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+.status-partial {
+  background: #fff3cd;
+  color: #856404;
 }
 </style>
